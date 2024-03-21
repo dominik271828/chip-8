@@ -28,7 +28,7 @@ type Colour = [f32; 4];
 const PIXEL_SIZE: f64 = 7.0;
 const WHITE: Colour = [1.0; 4];
 const BLACK: Colour = [0.0, 0.0, 0.0, 1.0];
-const UPDATE_RATE: u64 = 10; // I need 500hz for the CPU
+const UPDATE_RATE: u64 = 500; // I need 500hz for the CPU
 const FPS: u64 = 60; // How often I will refresh the display
 fn read_rom(path: &str) -> Vec<u8> {
     let mut f = File::open(path).expect("Failed to open rom!");
@@ -38,13 +38,14 @@ fn read_rom(path: &str) -> Vec<u8> {
 }
 
 fn main() {
-    let curr_rom: usize = 1;
+    let curr_rom: usize = 4;
     // Read the rom
-    let rom_list: Vec<&str> = vec!["1-chip8-logo.ch8", "2-ibm-logo.ch8"];
-    let cycles: Vec<u8> = vec![39, 20];
+    let rom_list: Vec<&str> = vec!["1-chip8-logo.ch8", "2-ibm-logo.ch8", "3-corax+.ch8", "4-flags.ch8", "6-keypad.ch8"];
     let rom: Vec<u8> = read_rom(format!("roms/{}", rom_list[curr_rom]).as_str());
     let mut cpu = cpu::Cpu::new();
     cpu.load_rom(rom);
+    // To skip the menu
+    cpu.ram[0x1FF] = 0x3;
     start_game(cpu);
 }
 fn start_game(mut cpu: cpu::Cpu) {
@@ -66,7 +67,21 @@ fn start_game(mut cpu: cpu::Cpu) {
     let mut update: u64 = 0;
     while let Some(e) = events.next(&mut window) {
         if let Some(x) = e.update_args() { // Every update equals one cpu cycle
-            cpu.emulate_cycle();
+            cpu.emulate_cycle().unwrap();
+        }
+        // Capture a keypress and send it to the CPU
+        if let Some(b) = e.button_args() {
+            // TODO: fix this naive implementation
+            if b.state == piston::ButtonState::Release {
+                if let Some(scancode) = b.scancode {
+                    cpu.key_released(scancode);
+                }
+            }
+            if b.state == piston::ButtonState::Press {
+                if let Some(scancode) = b.scancode {
+                    cpu.key_pressed(scancode);
+                }
+            }
         }
 
         if let Some(r) = e.render_args() {
