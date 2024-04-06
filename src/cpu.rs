@@ -43,6 +43,7 @@ pub struct Cpu {
     keys: [KeyState; 16],
     halt: bool, // Field for the instruction Fx0A
     halt_idx: usize, // Field for the instruction Fx0A
+    pub beep: bool, 
 }
 
 impl Cpu {
@@ -62,6 +63,7 @@ impl Cpu {
             keys: [KeyState::Up; 16],
             halt: false, 
             halt_idx:  0, 
+            beep: false, 
         }
     }
     fn run_opcode(&mut self, opcode: u16) -> Result<(), CpuError> {
@@ -78,6 +80,17 @@ impl Cpu {
         self.increment_pc();
 
         match f {
+            0xC000 => {
+             // Cxkk - RND Vx, byte
+             let random: u8 = 10;
+             self.v[x] = nn & random;
+             Ok(())
+            }
+            0xB000 => {
+                // Bnnn - JP V0, addr
+                self.pc = self.v[0x0] as u16 + nnn;
+                Ok(())
+            }
             0x1000 => {
                 // 1nnn - JP addr
                 self.pc = nnn;
@@ -194,10 +207,16 @@ impl Cpu {
                     0x1 => {
                         // 8xy1 - OR Vx, Vy
                         self.v[x] = self.v[x] | self.v[y];
+                        // Quirk
+                        self.v[0xF] = 0;
                         Ok(())
                     }
                     0x6 => {
                         //  8xy6 - SHR Vx {, Vy}
+                        // TODO: make this configurable
+                        if true {
+                            self.v[x] = self.v[y];
+                        }
                         let mut temp = 0;
                         if self.v[x] & 1 == 1 {
                             temp = 1;
@@ -209,10 +228,16 @@ impl Cpu {
                     0x2 => {
                         // 8xy2 - AND Vx, Vy
                         self.v[x] = self.v[x] & self.v[y];
+                        // Quirk
+                        self.v[0xF] = 0; 
                         Ok(())
                     }
                     0xE => {
                         // 8xyE - SHL Vx {, Vy}
+                        // TODO: make this configurable
+                        if true {
+                            self.v[x] = self.v[y];
+                        }
                         let mut temp = 0;
                         if self.v[x] >> 7 & 1 == 1 {
                             temp = 1;
@@ -224,6 +249,8 @@ impl Cpu {
                     0x3 => {
                         // 8xy3 - XOR Vx, Vy
                         self.v[x] ^= self.v[y];
+                        // Quirk
+                        self.v[0xF] = 0; 
                         Ok(())
                     }
 
@@ -235,6 +262,11 @@ impl Cpu {
             }
             0xF000 => {
                 match nn {
+                    // Fx29 - LD F, Vx
+                    0x29 => {
+                        self.i = x * 5;
+                        Ok(())
+                    }
                     // Fx0A - LD Vx, K
                     0x0A => {
                         self.halt_idx = x;
@@ -260,6 +292,7 @@ impl Cpu {
                     }
                     // Fx55 - LD [I], Vx
                     0x55 => {
+                        // TODO: make an option for configuring the behaviour
                         for idx in 0..x + 1 {
                             self.ram[self.i + idx] = self.v[idx];
                         }
@@ -278,6 +311,11 @@ impl Cpu {
                     0x1E => {
                         // Fx1E - ADD I, Vx
                         self.i = self.i.saturating_add(self.v[x].into());
+                        Ok(())
+                    }
+                    0x18 => {
+                        // Fx18 - LD ST, Vx
+                        self.st = self.v[x];
                         Ok(())
                     }
                     _ => {
@@ -332,14 +370,14 @@ impl Cpu {
                 0x9E => {
                     // Ex9E - SKP Vx
                     if self.keys[vxlow] == KeyState::Down {
-                        self.skip_ins();
+                        self.increment_pc();
                     }
                     Ok(())
                 }
                 0xA1 => {
                     // ExA1 - SKNP Vx
                     if self.keys[vxlow] == KeyState::Up {
-                        self.skip_ins();
+                        self.increment_pc();
                     }
                     Ok(())
                 }
@@ -408,11 +446,14 @@ impl Cpu {
             if self.dt > 0 {
                 self.dt -= 1;
             }
+            self.beep = false;
             if self.st > 0 {
+                self.beep = true;
                 self.st -= 1;
             }
             self.timer_counter = 0;
         }
+        // while self.st > 0 we should beep
         // For the purpose of the Fx0A instruction
         // all execution stops, but the timers are still ticking down
         if self.halt {

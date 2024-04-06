@@ -6,10 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sdl2 = "0.35"
+# sdl2 = "0.35" we'll see if this fucks up my shit
+sdl2 = "0.34"
 concat-arrays = "0.1.2"
 array2d = "0.3.0"
 piston = "0.55.0"
 pistoncore-glutin_window = "0.72.0"
 piston2d-graphics = "0.44.0"
 piston2d-opengl_graphics = "0.84.0"
+piston-music = "0.26.0"
