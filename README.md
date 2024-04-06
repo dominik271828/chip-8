@@ -13,3 +13,7 @@ Once the repository is cloned, run:
 ```
 cargo run /path/to/rom
 ```
+## What is not implemented yet
+* Random numbers
+* Sound
+
