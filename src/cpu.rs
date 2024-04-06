@@ -1,23 +1,9 @@
-// My PC is little endian, the CHIP-8 architecture is big endian, that doesn't matter here?
-// The stack pointer points to the topmost level of the stack
-// meaning that it points to empty space. If stack[0], stack[1], stack[2] have values inside of
-// them, then stack_pointer is 3 (it points to stack[3])
-// For now I don't check for overflow in certain places, If the necessity occurs, I will
-// do it
-// The last register V[0xF] seems to be for signifying overflow
-// 8xy5 is subtracting with wrap-around, I don't know if that's correct
-// TODO: Delete all of those allow's and get rid of warnings
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 use crate::fonts::FONTSET;
 use crate::UPDATE_RATE;
-use array2d::{Array2D, Error};
+use array2d::{Array2D};
 use concat_arrays::concat_arrays;
 const START_PC: usize = 0x200;
 const OPCODE_SIZE: usize = 2; // one opcode is 16 bits, that is 2 bytes
-const NEXT_PC: usize = START_PC + OPCODE_SIZE;
-const SKIPPED_PC: usize = START_PC + (2 * OPCODE_SIZE);
 pub const CHIP_8_HEIGHT: usize = 32;
 pub const CHIP_8_WIDTH: usize = 64;
 #[derive(PartialEq, Copy, Clone)]
@@ -27,9 +13,8 @@ enum KeyState {
 }
 #[derive(Debug)]
 pub struct CpuError(String);
-// TODO: make ram not pub
 pub struct Cpu {
-    pub ram: [u8; 4096],        // Four KB of memory
+    ram: [u8; 4096],        // Four KB of memory
     v: [u8; 16],                // 16 8-bit general purpose registers
     i: usize,                   // index register - used for stepping through arrays
     stack: [u16; 16],           // stack - so far used for storing adresses
@@ -37,7 +22,6 @@ pub struct Cpu {
     pc: u16,     // program counter - stores the location of the instruction to be executed
     dt: u8,      // delay timer - decrements every cycle if not zero
     st: u8,      // sound timer - decrements every cycle if not zero
-    opcode: u16, // current opcode - might be not needed
     pub display: Array2D<bool>, // store screen pixels - black and white
     timer_counter: u16, // counter to update dt in the desired intervals
     keys: [KeyState; 16],
@@ -57,7 +41,6 @@ impl Cpu {
             pc: START_PC as u16, // program counter starts at 0x200 (earlier is the interpreter code)
             dt: 0,               // not sure about this one
             st: 0,               // not sure about this one
-            opcode: 0x000,       // set current opcode
             display: Array2D::filled_with(false, CHIP_8_WIDTH, CHIP_8_HEIGHT), // set all pixels to black
             timer_counter: 0,
             keys: [KeyState::Up; 16],
@@ -197,7 +180,6 @@ impl Cpu {
                         let (result, underflow) = self.v[y].overflowing_sub(self.v[x]);
                         self.v[x] = result;
                         if underflow {
-                            // Cowgod says it should be >
                             self.v[0xF] = 0;
                         } else {
                             self.v[0xF] = 1;
@@ -264,7 +246,7 @@ impl Cpu {
                 match nn {
                     // Fx29 - LD F, Vx
                     0x29 => {
-                        self.i = x * 5;
+                        self.i = self.v[x] as usize * 5;
                         Ok(())
                     }
                     // Fx0A - LD Vx, K
@@ -411,7 +393,6 @@ impl Cpu {
 
     pub fn key_pressed(&mut self, key: i32) {
         if let Some(k) = Self::translate(key) {
-            eprintln!("{:#} is Down", k);
             self.keys[k as usize] = KeyState::Down;
             // If we're halting (Fx0A has been called),
             // save the key value to self.v[x] negate self.halt
@@ -422,7 +403,6 @@ impl Cpu {
     }
     pub fn key_released(&mut self, key: i32) {
         if let Some(k) = Self::translate(key) {
-            eprintln!("{:#} is Up", k);
             self.keys[k as usize] = KeyState::Up;
             // When pressed key is released, stop halting
             if self.halt {
@@ -433,11 +413,6 @@ impl Cpu {
     fn increment_pc(&mut self) {
         // Increments the PC
         self.pc += OPCODE_SIZE as u16;
-    }
-
-    fn skip_ins(&mut self) {
-        // Skips an instruction
-        self.pc += OPCODE_SIZE as u16 * 2;
     }
     pub fn emulate_cycle(&mut self) -> Result<(), CpuError> {
         // update timers 60 times per second
