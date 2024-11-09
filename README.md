@@ -24,6 +24,9 @@ Once inside the repository folder, run:
 ```
 cargo run /path/to/rom
 ```
+
+### Improvements
+Sound and random number still need to be implemented, otherwise, the emulator is fully-fledged.
 ## Contributing
 
 Feel free to fork this repository, submit issues, or make pull requests. Contributions are always welcome.
